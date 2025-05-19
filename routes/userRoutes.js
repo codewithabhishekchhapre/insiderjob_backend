@@ -1,27 +1,29 @@
 import express from 'express'
-import { applyForJob, getUserData, getUserJobApplications, updateUserResume, userlogin, usersignup, createUserIfNotExists } from '../controllers/userController.js'
+import {  getUserData,  userlogin, usersignup, deleteUser, changeUserRole, getAllUsers, getUserCompany, uploadResume, updateUserProfile } from '../controllers/userController.js'
 import upload from '../config/multer.js'
-
-
+import { requireRole } from '../middleware/authMiddleware.js'
 
 const router = express.Router()
 
-router.post("/signup", usersignup);
-router.post("/login", userlogin);
-router.post('/create-user', createUserIfNotExists);
+// Public routes
+router.post('/signup', upload.single('image'), usersignup)
+router.post('/login', userlogin)
 
+// Resume upload
+router.post('/:id/upload-resume', upload.single('resume'), uploadResume)
 
-// Get user Data    
-router.get('/user',getUserData)
+// Protected routes
+router.get('/me', getUserData)
 
-// Apply for a job 
-router.post('/apply',applyForJob)
+// Admin routes
+router.get('/all', getAllUsers)
+router.delete('/:id', deleteUser)
+router.put('/:id/role', changeUserRole)
 
-// Get applied jobs data 
-router.get('/applications', getUserJobApplications)
+// Recruiter: get joined company
+router.get('/:id/company', getUserCompany)
 
-//Update User profile(resume)
-router.post('/update-resume', upload.single('resume'), updateUserResume)
+// Update user profile
+router.put('/:id/profile', upload.single('image'), updateUserProfile)
 
-
-export default router;
+export default router
