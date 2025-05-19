@@ -1,27 +1,41 @@
 import jwt from 'jsonwebtoken'
-import Company from '../models/Company.js'
+import User from '../models/User.js'
 
-// Middleware ( Protect Company Routes )
-export const protectCompany = async (req, res,next) => {
 
-    // Getting Token Froms Headers
-    const token = req.headers.token
 
-    
+// Middleware ( Protect User Routes )
+export const protectUser = async (req, res, next) => {
+    let token;
+
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1]
+    } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token
+    }
+
     if (!token) {
-        return res.json({success:false, message: 'Not authorized, Login Again'})
+        return res.status(401).json({
+            success: false,
+            message: 'Not authorized, no token'
+        })
     }
 
     try {
-        
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-        req.company = await Company.findById(decoded.id).select('-password')
-
+        req.user = await User.findById(decoded.id).select('-password')
         next()
-
     } catch (error) {
-        res.json({success:false, message: error.message})
+        res.status(401).json({
+            success: false,
+            message: 'Not authorized'
+        })
     }
-
 }
+
+// Role-based access middleware
+export const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user || !roles.includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Forbidden: insufficient role' });
+  }
+  next();
+};

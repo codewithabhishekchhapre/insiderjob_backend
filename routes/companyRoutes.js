@@ -1,32 +1,36 @@
-import express from 'express'
-import { ChangeJobApplicationsStatus, changeVisiblity, getCompanyData, getCompanyJobApplicants, getCompanyPostedJobs, loginCompany, postJob, registerCompany } from '../controllers/companyController.js'
-import upload from '../config/multer.js'
-import { protectCompany } from '../middleware/authMiddleware.js'
+import express from 'express';
+import upload from '../utils/upload.js';
+import {
+  createCompany,
+  getAllCompanies,
+  getCompanyById,
+  updateCompany,
+  deleteCompany,
+  addRecruiterToCompany,
+  removeRecruiterFromCompany,
+  getCompanyRecruiters,
+  getCompanyJobs,
+  getCompanyAnalytics,
+  leaveCompany,
+  joinCompany
+} from '../controllers/companyController.js';
 
-const router = express.Router()
+const router = express.Router();
 
-// Register a company
-router.post('/register', upload.single('image'), registerCompany)
+router.post('/create', upload.single('logo'), createCompany);
+router.get('/all', getAllCompanies);
+router.get('/:id', getCompanyById);
+router.put('/:id', upload.single('logo'), updateCompany);
+router.delete('/:id', deleteCompany);
 
-//company login
-router.post('/login',loginCompany)
+router.post('/:id/add-recruiter', addRecruiterToCompany);
+router.post('/:id/remove-recruiter', removeRecruiterFromCompany);
+router.get('/:id/recruiters', getCompanyRecruiters);
 
-// get company data 
-router.get('/company',protectCompany, getCompanyData)
+router.get('/:id/jobs', getCompanyJobs);
+router.get('/:id/analytics', getCompanyAnalytics);
 
-//Post a job
-router.post('/post-job',protectCompany,postJob)
+router.post('/:id/join', joinCompany);
+router.post('/:id/leave', leaveCompany);
 
-//Get Applicants Data of Company
-router.get('/applicants',protectCompany,getCompanyJobApplicants)
-
-//Get company Job List
-router.get('/list-jobs',protectCompany,getCompanyPostedJobs)
-
-//Change Application Status
-router.post('/change-status',protectCompany,ChangeJobApplicationsStatus)
-
-//Change Application Visibility 
-router.post('/change-visiblity',protectCompany, changeVisiblity)
-
-export default router
+export default router; 

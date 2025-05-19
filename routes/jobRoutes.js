@@ -1,14 +1,13 @@
-import express from 'express'
-import { getJobById, getJobs } from '../controllers/jobController.js';
+import express from 'express';
+import { createJob, getMyJobs, updateJob, deleteJob, getAllJobs, applyForJob } from '../controllers/jobController.js';
 
-const router = express.Router()
+const router = express.Router();
 
-// Route to get all job data 
-router.get('/',getJobs)
+router.get('/', getAllJobs);
+router.post('/create', createJob);
+router.get('/my', getMyJobs);
+router.put('/:id', updateJob);
+router.delete('/:id', deleteJob);
+router.post('/:id/apply', applyForJob);
 
-//Route to get a single job by ID 
-router.get('/:id', getJobById)
-
-
-
-export default router;
+export default router; 

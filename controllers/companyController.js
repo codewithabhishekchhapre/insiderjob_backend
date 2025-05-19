@@ -1,219 +1,195 @@
-import Company from "../models/Company.js";
-import bcrypt from 'bcrypt'
-import {v2 as cloudinary} from 'cloudinary'
-import generateToken from "../utils/generateToken.js";
-import Job from "../models/Job.js";
-import JobApplication from "../models/JobApplication.js";
+import Company from '../models/Company.js';
+import User from '../models/User.js';
+import Job from '../models/Job.js';
+import cloudinary from '../config/cloudinary.js';
+import mongoose from 'mongoose';
 
-// Register a new cmpany
-export const registerCompany = async (req,res) => {
-
-    const {name, email, password} = req.body  
-
-    const imageFile = req.file;
-
-    if(!name || !email || !password || !imageFile){
-        return res.json({success:false, message: "Missing Details"})
+export const createCompany = async (req, res) => {
+  try {
+    const { name, description, website, size, address } = req.body;
+    let logoUrl = '';
+    if (req.file) {
+      await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: 'image', folder: 'company_logos' },
+          (error, result) => {
+            if (error) reject(error);
+            else {
+              logoUrl = result.secure_url;
+              resolve();
+            }
+          }
+        );
+        stream.end(req.file.buffer);
+      });
     }
-    try{
+    const company = new Company({ name, description, logo: logoUrl, website, size, address });
+    await company.save();
+    res.status(201).json(company);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-        const companyExists = await Company.findOne({email})
+export const getAllCompanies = async (req, res) => {
+  try {
+    const companies = await Company.find();
+    res.json(companies);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-        if(companyExists){
-            return res.json({success:false, message:'Company alredy registered'})
-        }
+export const getCompanyById = async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id)
+      .populate('recruiters', 'name email role')
+      .populate('jobPosts');
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-        const salt = await bcrypt.genSalt(10)
-        const hashPassword = await bcrypt.hash(password, salt)
-
-        const imageUpload = await cloudinary.uploader.upload(imageFile.path)
-
-        const company = await Company.create({
-            name,
-            email,
-            password: hashPassword,
-            image: imageUpload.secure_url
-        })
-
-        res.json({
-            success: true,
-            company:{
-                _id: company._id,
-                name: company.name,
-                email: company.email,
-                image: company.image,
-            },
-            token: generateToken(company._id)
-        })
-
-    }catch(error){
-        res.json({success:false, message: error.message})
+export const updateCompany = async (req, res) => {
+  try {
+    const { name, description, website, size, address } = req.body;
+    let logoUrl;
+    if (req.file) {
+      await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: 'image', folder: 'company_logos' },
+          (error, result) => {
+            if (error) reject(error);
+            else {
+              logoUrl = result.secure_url;
+              resolve();
+            }
+          }
+        );
+        stream.end(req.file.buffer);
+      });
     }
-}
+    const update = { name, description, website, size, address };
+    if (logoUrl) update.logo = logoUrl;
+    const company = await Company.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-//Company login
-export const loginCompany = async (req,res) => {
+export const deleteCompany = async (req, res) => {
+  try {
+    const company = await Company.findByIdAndDelete(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json({ message: 'Company deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    const {email,password } = req.body
-
-    try {
-        
-        const company = await Company.findOne({email})
-
-
-        if(await bcrypt.compare(password,company.password)){
-
-            res.json({
-                success:true,
-                company:{
-                    _id: company._id,
-                    name: company.name,
-                    email: company.email,
-                    image: company.image,
-                },
-                token: generateToken(company._id)
-            })
-
-        }
-        else{
-            res.json({success:false, message: 'Invalid email or password'})
-        }
-
-    } catch (error) {
-        res.json({success:false, message: error.message})
+export const addRecruiterToCompany = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    if (!company.recruiters.includes(userId)) {
+      company.recruiters.push(userId);
+      await company.save();
     }
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-}
+export const removeRecruiterFromCompany = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    company.recruiters = company.recruiters.filter(r => r.toString() !== userId);
+    await company.save();
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-//Get company data
-export const getCompanyData = async (req,res) => {
+export const getCompanyRecruiters = async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id).populate('recruiters', 'name email role');
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json(company.recruiters);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    try {
+export const getCompanyJobs = async (req, res) => {
+  try {
+    const jobs = await Job.find({ company: req.params.id });
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-        const company = req.company
-        
-        res.json({success:true, company})
+export const getCompanyAnalytics = async (req, res) => {
+  try {
+    const companyId = req.params.id;
+    const jobCount = await Job.countDocuments({ company: companyId });
+    const recruiterCount = await Company.findById(companyId).then(c => c?.recruiters.length || 0);
+    const jobs = await Job.find({ company: companyId });
+    const totalApplications = jobs.reduce((sum, job) => sum + (job.applications?.length || 0), 0);
+    res.json({ jobCount, recruiterCount, totalApplications });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    } catch (error) {
-        res.json({
-            success:false,message: error.message
-        })
+// Recruiter joins a company by id (no code)
+export const joinCompany = async (req, res) => {
+  try {
+    const { recruiterId } = req.body;
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    const recruiter = await User.findById(recruiterId);
+    if (!recruiter) return res.status(404).json({ error: 'Recruiter not found' });
+    // If recruiter is already in a company, remove from that company
+    if (recruiter.company && recruiter.company.toString() !== company._id.toString()) {
+      await Company.findByIdAndUpdate(recruiter.company, { $pull: { recruiters: recruiterId } });
     }
-
-}
-
-//Post  a new job
-export const postJob = async (req,res) => {
-    
-    const { title, description, location, salary, level, category} = req.body
-
-    const companyId = req.company._id                    
-    // console.log(companyId,{title,description,location,salary});
-    try {
-        
-        const newJob = new Job({
-            title,
-            description,
-            location,
-            salary,
-            companyId,
-            date: Date.now(),
-            level,
-            category
-        })
-
-        await newJob.save()
-
-        res.json({success:true, newJob})
-
-    } catch (error) {
-
-        res.json({success:false, message: error.message})
-
-    }   
-
-
-}
-
-//Get company Job Applicants
-export const getCompanyJobApplicants = async (req,res) => {
-    try {
-        
-        const companyId = req.company._id
-
-        //find job applications for the user and populate related data
-        const applications = await JobApplication.find({companyId})
-        .populate('userId', 'name image resume')
-        .populate('jobId', 'title location category level salary')
-        .exec()
-
-        return res.json({success:true, applications})
-
-    } catch (error) {
-        res.json({success:false, message:error.message})
+    // Add recruiter to new company if not already present
+    if (!company.recruiters.includes(recruiterId)) {
+      company.recruiters.push(recruiterId);
+      await company.save();
     }
+    recruiter.company = company._id;
+    await recruiter.save();
+    res.json({ message: 'Joined company', company });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-}
-
-//Get company posted Jobs
-export const getCompanyPostedJobs = async (req,res) => {
-    try {
-        
-        const companyId = req.company._id
-
-        const jobs = await Job.find({companyId})
-
-        //  Adding No. of applicants info in data
-        const jobsData = await Promise.all(jobs.map(async (job) =>{
-            const applicants = await JobApplication.find({jobId:job._id});
-            return {...job.toObject(), applicants:applicants.length}
-        }))
-
-        res.json({success:true, jobsData})
-
-    } catch (error) {
-        res.json({success:false, message: error.message})
-    }
-}
-
-//change Job Applications Status
-export const ChangeJobApplicationsStatus = async (req,res) => {
-
-    try {
-        
-        const {id,status} =  req.body
-
-    //Find Job application and update status 
-    await JobApplication.findOneAndUpdate({_id:id},{status})
-
-    res.json({success:true, message:'Status Changed'})
-
-    } catch (error) {
-        res.json({success:false, message:error.message})
-    }
-
-
-}
-
-// change job visibility
-export const changeVisiblity = async (req,res) => {
-    try {
-
-        const {id} =  req.body
-
-        const companyId = req.company._id
-
-        const job = await Job.findById(id)
-
-        if (companyId.toString() === job.companyId.toString()) {
-            job.visible = !job.visible
-        }
-
-        await job.save()
-
-        res.json({success:true,job})
-
-    } catch (error) {
-       res.json({success:false, message:error.message}) 
-    }
-}
+// Recruiter leaves a company
+export const leaveCompany = async (req, res) => {
+  try {
+    const { recruiterId } = req.body;
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    const recruiter = await User.findById(recruiterId);
+    if (!recruiter) return res.status(404).json({ error: 'Recruiter not found' });
+    company.recruiters = company.recruiters.filter(r => r.toString() !== recruiterId);
+    await company.save();
+    recruiter.company = null;
+    await recruiter.save();
+    res.json({ message: 'Left company' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}; 
